@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title >Détail livre — Folio</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth.js"></script>
+</head>
+<body>
+<nav>
+    <a href="#" class="nav-logo">
+  Fo<span class="dot">.</span>lio
+</a>
+  <ul class="nav-links">
+    <li><a href="index.html">Catalogue</a></li>
+    <li><a href="preferences.html">Mon profil</a></li>
+    <li><a href="recommendations.html">Pour moi</a></li>
+    <li><a href="health.html">Statut</a></li>
+  </ul>
+  <div class="nav-right">
+    <span class="nav-user">Bonjour, <strong id="navUsername">—</strong></span>
+    <button class="btn-logout" onclick="logout()">Déconnexion</button>
+  </div>
+</nav>
+
+<div class="page">
+  <div id="bookContent">
+    <div class="loading-row"><span></span><span></span><span></span></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// Auth check
+const session = requireAuth();
+if (!session) window.location.href = 'login.html';
+document.getElementById('navUsername').textContent = session.username || '—';
+
+// Get book_id from URL: book-detail.html?id=35031085
+const params = new URLSearchParams(window.location.search);
+const bookId = params.get('id') || '35031085';
+
+// ── MOCK BOOK DATA (replace with fetch when API ready) ──
+const MOCK_BOOKS = {
+  '35031085': {
+    book_id: '35031085', title: 'Frankenstein: The 1818 Text',
+    author: 'Mary Shelley', genre: 'Horror', avg_rating: 4.2,
+    description: "Frankenstein; or, The Modern Prometheus is a novel written by English author Mary Shelley. It tells the story of Victor Frankenstein, a young scientist who creates a sapient creature in an unorthodox scientific experiment. Shelley started writing the story when she was 18, and the first edition was published anonymously in London in 1818. The story has since had a widespread cultural impact.",
+    image_url: null, year: 1818
+  },
+  '3': {
+    book_id: '3', title: "Harry Potter and the Sorcerer's Stone",
+    author: 'J.K. Rowling', genre: 'Fantasy', avg_rating: 4.8,
+    description: "Harry Potter has never even heard of Hogwarts when the letters start dropping on the doormat at number four, Privet Drive. Addressed in green ink on yellowish parchment with a purple seal, they are swiftly confiscated by his grisly aunt and uncle. Then, on Harry's eleventh birthday, a great beetle-eyed giant of a man called Rubeus Hagrid bursts in with some astonishing news.",
+    image_url: null, year: 1997
+  }
+};
+
+const MOCK_REVIEWS = [
+  { username: 'Sean Barrs', rating: 5, review: 'One of the most influential gothic novels ever written. Shelley explores themes of creation, responsibility, and what it means to be human.', created_at: '2024-03-15' },
+  { username: 'Emily May', rating: 4, review: 'A fascinating exploration of scientific ethics far ahead of its time. The creature is far more sympathetic than Victor himself.', created_at: '2024-02-20' }
+];
+
+const genreColors = {
+  'Horror': '#2d1b1b', 'Fantasy': '#1a2540', 'Fiction': '#1c2b1c',
+  'Science Fiction': '#1a1a2e', 'Romance': '#2e1a22', 'Mystery': '#1e1e1e',
+};
+
+let userInteraction = { is_read: 0, rating: 0, review: '' };
+let currentRating = 0;
+
+async function loadBook() {
+  // ── REAL API avec JWT ──
+  // const [book, reviews, inter] = await Promise.all([
+  //   apiFetch('/books/' + bookId),
+  //   apiFetch('/books/' + bookId + '/reviews'),
+  //   apiFetch('/interactions?book_id=' + bookId)  // user_id extrait du token côté serveur
+  // ]);
+  // userInteraction = inter || { is_read: 0, rating: 0, review: '' };
+
+  // ── MOCK ──
+  const book = MOCK_BOOKS[bookId] || MOCK_BOOKS['35031085'];
+  const reviews = MOCK_REVIEWS;
+  userInteraction = { is_read: 0, rating: 3, review: '' };
+  currentRating = userInteraction.rating;
+
+  renderBook(book, reviews);
+}
+
+function starsHtml(rating, size = '1rem') {
+  return [1,2,3,4,5].map(n =>
+    `<span style="font-size:${size};cursor:pointer;color:${n<=rating?'var(--gold)':'var(--border)'}"
+      onmouseover="hoverStar(${n})" onmouseout="resetStars()"
+      onclick="selectRating(${n})">★</span>`
+  ).join('');
+}
+
+function renderBook(book, reviews) {
+  const bg = genreColors[book.genre] || '#2a2a2a';
+  const isRead = userInteraction.is_read === 1;
+
+  document.getElementById('bookContent').innerHTML = `
+    <div class="page-header">
+      <p class="eyebrow">${book.genre} · ${book.year || ''}</p>
+      <h1>${book.title}</h1>
+      <p>${book.author}</p>
+    </div>
+
+    <div class="book-detail-grid">
+      <!-- Couverture + actions -->
+      <div>
+        <div class="book-detail-cover" style="background:${bg}">
+          <div style="text-align:center;padding:1.5rem">
+            <div style="font-family:var(--serif);font-size:0.85rem;font-style:italic;color:rgba(255,255,255,0.7);line-height:1.4">${book.title}</div>
+            <div style="width:30px;height:1px;background:rgba(255,255,255,0.3);margin:0.8rem auto"></div>
+            <div style="font-family:var(--sans);font-size:0.7rem;color:rgba(255,255,255,0.5)">${book.author}</div>
+          </div>
+        </div>
+
+        <div class="book-actions">
+          <!-- BOUTON IS_READ -->
+          <button class="btn-isread ${isRead ? 'read' : ''}" id="readBtn" onclick="toggleRead()">
+            ${isRead ? '✓ Lu' : 'Marquer comme lu'}
+          </button>
+
+          <!-- NOTE ÉTOILES -->
+          <div style="padding:1rem;background:var(--white);border:1px solid var(--border)">
+            <div style="font-family:var(--sans);font-size:0.7rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-light);margin-bottom:0.6rem">Ma note</div>
+            <div id="starRow" style="display:flex;gap:4px">${starsHtml(currentRating)}</div>
+            <div style="font-family:var(--sans);font-size:0.75rem;color:var(--ink-light);margin-top:0.4rem" id="ratingLabel">
+              ${currentRating > 0 ? currentRating + '/5' : 'Cliquez pour noter'}
+            </div>
+          </div>
+
+          <!-- REVIEW -->
+          <div style="padding:1rem;background:var(--white);border:1px solid var(--border)">
+            <div style="font-family:var(--sans);font-size:0.7rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-light);margin-bottom:0.6rem">Mon avis</div>
+            <textarea id="reviewInput" class="review-box" placeholder="Partagez votre avis sur ce livre..." style="min-height:90px;font-size:0.85rem">${userInteraction.review || ''}</textarea>
+            <button onclick="submitReview()" style="margin-top:0.6rem;width:100%;background:var(--ink);color:var(--white);border:none;padding:0.6rem;font-family:var(--sans);font-size:0.78rem;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;border-radius:2px;transition:background 0.2s" onmouseover="this.style.background='var(--accent)'" onmouseout="this.style.background='var(--ink)'">
+              Publier l'avis
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Info livre -->
+      <div>
+        <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem">
+          <div style="background:#1a1a2e;border:1px solid var(--gold);border-radius:4px;padding:8px 12px;text-align:center">
+            <div style="color:var(--gold);font-size:0.7rem">★</div>
+            <div style="color:var(--gold);font-family:var(--serif);font-size:1.4rem;font-weight:600;line-height:1">${book.avg_rating.toFixed(1)}</div>
+            <div style="color:#888;font-size:0.65rem;font-family:var(--sans)">FolioDB</div>
+          </div>
+          <div>
+            <div style="font-family:var(--sans);font-size:0.78rem;color:var(--ink-light)">Note moyenne</div>
+            <div style="font-family:var(--sans);font-size:0.78rem;color:var(--ink-muted)">${reviews.length} avis sur FolioDB</div>
+          </div>
+        </div>
+
+        <div style="font-family:var(--sans);font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-light);margin-bottom:0.8rem">Résumé</div>
+        <p class="book-desc">${book.description}</p>
+
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:2rem">
+          <span class="rec-genre-tag">${book.genre}</span>
+          ${book.year ? `<span class="rec-genre-tag">${book.year}</span>` : ''}
+        </div>
+
+        <!-- AVIS UTILISATEURS -->
+        <div style="border-top:1px solid var(--border);padding-top:2rem">
+          <h3 style="font-family:var(--serif);font-size:1.2rem;margin-bottom:1.5rem">Avis des lecteurs</h3>
+          ${reviews.length === 0
+            ? `<p style="font-family:var(--body);font-style:italic;color:var(--ink-light)">Aucun avis pour l'instant. Soyez le premier !</p>`
+            : reviews.map(r => `
+              <div style="padding:1.2rem 0;border-bottom:1px solid var(--border)">
+                <div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:0.5rem">
+                  <div style="width:32px;height:32px;border-radius:50%;background:#1a1a2e;display:flex;align-items:center;justify-content:center;font-family:var(--sans);font-size:0.75rem;color:var(--gold);font-weight:500">
+                    ${r.username.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <div style="font-family:var(--sans);font-size:0.83rem;font-weight:500;color:var(--ink)">${r.username}</div>
+                    <div style="font-size:0.7rem;color:var(--gold)">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</div>
+                  </div>
+                  <div style="margin-left:auto;font-family:var(--sans);font-size:0.72rem;color:var(--ink-light)">${r.created_at}</div>
+                </div>
+                <p style="font-family:var(--body);font-size:0.88rem;color:var(--ink-muted);line-height:1.6;font-style:italic">"${r.review}"</p>
+              </div>`).join('')
+          }
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── TOGGLE IS_READ ──
+async function toggleRead() {
+  const btn = document.getElementById('readBtn');
+  const newVal = userInteraction.is_read === 1 ? 0 : 1;
+
+  // ── REAL API avec JWT ──
+  // await apiFetch('/interactions/read', {
+  //   method: 'POST',
+  //   body: JSON.stringify({ book_id: bookId, is_read: newVal })
+  // });
+
+  userInteraction.is_read = newVal;
+  if (newVal === 1) {
+    btn.textContent = '✓ Lu'; btn.classList.add('read');
+    showToast('Marqué comme lu !', 'success');
+  } else {
+    btn.textContent = 'Marquer comme lu'; btn.classList.remove('read');
+    showToast('Retiré des livres lus.');
+  }
+}
+
+// ── STAR RATING ──
+function hoverStar(n) {
+  const stars = document.querySelectorAll('#starRow span');
+  stars.forEach((s, i) => s.style.color = i < n ? 'var(--gold)' : 'var(--border)');
+}
+
+function resetStars() {
+  const stars = document.querySelectorAll('#starRow span');
+  stars.forEach((s, i) => s.style.color = i < currentRating ? 'var(--gold)' : 'var(--border)');
+}
+
+async function selectRating(n) {
+  currentRating = n;
+  document.getElementById('ratingLabel').textContent = n + '/5';
+  resetStars();
+
+  // ── REAL API avec JWT ──
+  // await apiFetch('/interactions/rate', {
+  //   method: 'POST',
+  //   body: JSON.stringify({ book_id: bookId, rating: n })
+  // });
+
+  showToast(`Note ${n}/5 enregistrée !`, 'success');
+}
+
+// ── SUBMIT REVIEW ──
+async function submitReview() {
+  const review = document.getElementById('reviewInput').value.trim();
+  if (review.length < 5) { showToast('Votre avis est trop court.'); return; }
+
+  // ── REAL API avec JWT ──
+  // await apiFetch('/interactions/review', {
+  //   method: 'POST',
+  //   body: JSON.stringify({ book_id: bookId, review })
+  // });
+
+  showToast('Avis publié !', 'success');
+}
+
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+loadBook();
+</script>
+</body>
+</html>
