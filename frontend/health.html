@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Statut API — Folio</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth.js"></script>
+</head>
+<body>
+<nav>
+    <a href="#" class="nav-logo">
+  Fo<span class="dot">.</span>lio
+</a>
+  <ul class="nav-links">
+    <li><a href="index.html">Catalogue</a></li>
+    <li><a href="preferences.html">Mon profil</a></li>
+    <li><a href="recommendations.html">Pour moi</a></li>
+    <li><a href="health.html" class="active">Statut</a></li>
+  </ul>
+  <div class="nav-right">
+    <span class="nav-user">Bonjour, <strong id="navUsername">—</strong></span>
+    <button class="btn-logout" onclick="logout()">Déconnexion</button>
+  </div>
+</nav>
+
+<div class="page">
+  <div class="page-header">
+    <p class="eyebrow">GET /health</p>
+    <h1>Statut du <em>système</em></h1>
+    <p>Monitoring en temps réel de l'API, du modèle ANN et de la base de données MySQL.</p>
+  </div>
+
+  <!-- CARDS -->
+  <div class="health-grid">
+    <div class="health-card">
+      <div class="health-card-header">
+        <span class="health-card-title">API Server</span>
+        <span class="status-badge" id="badgeApi">Vérification…</span>
+      </div>
+      <div class="health-value" id="valApi">—</div>
+      <div class="health-desc">FastAPI · Uvicorn · localhost:8000</div>
+    </div>
+    <div class="health-card">
+      <div class="health-card-header">
+        <span class="health-card-title">Modèle ANN</span>
+        <span class="status-badge" id="badgeModel">Vérification…</span>
+      </div>
+      <div class="health-value" id="valModel">—</div>
+      <div class="health-desc">models/model.pkl · joblib</div>
+    </div>
+    <div class="health-card">
+      <div class="health-card-header">
+        <span class="health-card-title">Base MySQL</span>
+        <span class="status-badge" id="badgeDB">Vérification…</span>
+      </div>
+      <div class="health-value" id="valDB">—</div>
+      <div class="health-desc">3 tables · foliodb</div>
+    </div>
+    <div class="health-card">
+      <div class="health-card-header">
+        <span class="health-card-title">Latence</span>
+        <span class="status-badge" id="badgeLatency">—</span>
+      </div>
+      <div class="health-value" id="valLatency">—</div>
+      <div class="health-desc">Dernier ping /health</div>
+    </div>
+    <div class="health-card">
+      <div class="health-card-header">
+        <span class="health-card-title">Livres chargés</span>
+        <span class="status-badge ok">Dataset</span>
+      </div>
+      <div class="health-value" id="valBooks">270k+</div>
+      <div class="health-desc">Goodreads · Book-Crossing</div>
+    </div>
+    <div class="health-card">
+      <div class="health-card-header">
+        <span class="health-card-title">Interactions</span>
+        <span class="status-badge" id="badgeInter">—</span>
+      </div>
+      <div class="health-value" id="valInter">—</div>
+      <div class="health-desc">is_read + ratings + reviews</div>
+    </div>
+  </div>
+
+  <!-- STATS DB -->
+  <div style="background:var(--white);border:1px solid var(--border);padding:1.6rem;margin-bottom:2.5rem">
+    <p style="font-family:var(--sans);font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-light);margin-bottom:1.2rem">Statistiques base de données</p>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem">
+      <div style="text-align:center;padding:1rem;background:var(--cream);border-radius:4px">
+        <div style="font-family:var(--serif);font-size:1.6rem;font-weight:600;color:var(--accent)" id="statUsers">—</div>
+        <div style="font-family:var(--sans);font-size:0.72rem;color:var(--ink-light);margin-top:0.3rem">Utilisateurs</div>
+      </div>
+      <div style="text-align:center;padding:1rem;background:var(--cream);border-radius:4px">
+        <div style="font-family:var(--serif);font-size:1.6rem;font-weight:600;color:var(--accent)" id="statBooks">—</div>
+        <div style="font-family:var(--sans);font-size:0.72rem;color:var(--ink-light);margin-top:0.3rem">Livres</div>
+      </div>
+      <div style="text-align:center;padding:1rem;background:var(--cream);border-radius:4px">
+        <div style="font-family:var(--serif);font-size:1.6rem;font-weight:600;color:var(--accent)" id="statRatings">—</div>
+        <div style="font-family:var(--sans);font-size:0.72rem;color:var(--ink-light);margin-top:0.3rem">Notes</div>
+      </div>
+      <div style="text-align:center;padding:1rem;background:var(--cream);border-radius:4px">
+        <div style="font-family:var(--serif);font-size:1.6rem;font-weight:600;color:var(--accent)" id="statReviews">—</div>
+        <div style="font-family:var(--sans);font-size:0.72rem;color:var(--ink-light);margin-top:0.3rem">Avis</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- REFRESH + LAST CHECKED -->
+  <div style="display:flex;align-items:center;gap:1.5rem;margin-bottom:2.5rem">
+    <button class="btn-primary" style="width:auto;padding:0.75rem 2rem" onclick="runHealthCheck()">Rafraîchir</button>
+    <span style="font-family:var(--sans);font-size:0.78rem;color:var(--ink-light)" id="lastChecked">Pas encore vérifié.</span>
+  </div>
+
+  <!-- ENDPOINTS TABLE -->
+  <div style="margin-bottom:2.5rem">
+    <h2 style="font-family:var(--serif);font-size:1.2rem;font-weight:600;margin-bottom:1.2rem">Endpoints disponibles</h2>
+    <table class="endpoints-table">
+      <thead>
+        <tr>
+          <th>Méthode</th><th>Endpoint</th><th>Description</th><th>Statut</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="method-get">GET</span></td><td><span class="endpoint-path">/books</span></td><td style="color:var(--ink-muted);font-size:0.8rem">Liste avec filtres genre/auteur</td><td id="st1">—</td></tr>
+        <tr><td><span class="method-post">POST</span></td><td><span class="endpoint-path">/recommend</span></td><td style="color:var(--ink-muted);font-size:0.8rem">N recommandations personnalisées</td><td id="st2">—</td></tr>
+        <tr><td><span class="method-post">POST</span></td><td><span class="endpoint-path">/user/preferences</span></td><td style="color:var(--ink-muted);font-size:0.8rem">Sauvegarder profil utilisateur</td><td id="st3">—</td></tr>
+        <tr><td><span class="method-post">POST</span></td><td><span class="endpoint-path">/auth/login</span></td><td style="color:var(--ink-muted);font-size:0.8rem">Connexion utilisateur</td><td id="st4">—</td></tr>
+        <tr><td><span class="method-post">POST</span></td><td><span class="endpoint-path">/auth/register</span></td><td style="color:var(--ink-muted);font-size:0.8rem">Inscription utilisateur</td><td id="st5">—</td></tr>
+        <tr><td><span class="method-post">POST</span></td><td><span class="endpoint-path">/interactions/read</span></td><td style="color:var(--ink-muted);font-size:0.8rem">Marquer livre comme lu (is_read)</td><td id="st6">—</td></tr>
+        <tr><td><span class="method-post">POST</span></td><td><span class="endpoint-path">/interactions/rate</span></td><td style="color:var(--ink-muted);font-size:0.8rem">Noter un livre (1-5)</td><td id="st7">—</td></tr>
+        <tr><td><span class="method-get">GET</span></td><td><span class="endpoint-path">/health</span></td><td style="color:var(--ink-muted);font-size:0.8rem">Statut API + modèle</td><td id="st8">—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- LOG BOX -->
+  <div>
+    <h2 style="font-family:var(--serif);font-size:1.2rem;font-weight:600;margin-bottom:1rem">Journal d'activité</h2>
+    <div class="log-box" id="logBox">
+      <span class="log-time">[--:--:--]</span> En attente du premier check…<br>
+    </div>
+  </div>
+</div>
+
+<script>
+const session = requireAuth();
+if (!session) window.location.href = 'login.html';
+document.getElementById('navUsername').textContent = session.username || '—';
+
+function log(msg, type='ok') {
+  const box = document.getElementById('logBox');
+  const now = new Date().toTimeString().slice(0,8);
+  box.innerHTML += `<span class="log-time">[${now}]</span> <span class="log-${type}">${msg}</span><br>`;
+  box.scrollTop = box.scrollHeight;
+}
+
+function badge(ok, labelOk='En ligne', labelFail='Hors ligne') {
+  return `<span class="status-badge ${ok?'ok':'error'}">${ok?labelOk:labelFail}</span>`;
+}
+
+async function runHealthCheck() {
+  log('Vérification GET /health…');
+  const t0 = performance.now();
+  let apiOk = false; let data = {};
+
+  // ── REAL API ──
+  // try {
+  //   const res = await fetch(API + '/health');
+  //   data = await res.json();
+  //   apiOk = res.ok;
+  // } catch { log('Connexion refusée — serveur en cours de démarrage ?', 'err'); }
+
+  // ── MOCK ──
+  await new Promise(r => setTimeout(r, 500));
+  apiOk = false;
+
+  const latency = ((performance.now()-t0)/1000).toFixed(3);
+
+  document.getElementById('badgeApi').outerHTML; // refresh
+  document.getElementById('badgeApi').className = 'status-badge '+(apiOk?'ok':'error');
+  document.getElementById('badgeApi').textContent = apiOk ? 'En ligne' : 'Hors ligne';
+  document.getElementById('valApi').textContent = apiOk ? 'Running' : 'Offline';
+
+  document.getElementById('badgeModel').className = 'status-badge '+(apiOk?'ok':'warn');
+  document.getElementById('badgeModel').textContent = apiOk ? 'Chargé' : '—';
+  document.getElementById('valModel').textContent = apiOk ? 'Prêt' : '—';
+
+  document.getElementById('badgeDB').className = 'status-badge '+(apiOk?'ok':'warn');
+  document.getElementById('badgeDB').textContent = apiOk ? 'Connectée' : '—';
+  document.getElementById('valDB').textContent = apiOk ? '3 tables' : '—';
+
+  const fast = parseFloat(latency) < 0.5;
+  document.getElementById('badgeLatency').className = 'status-badge '+(fast?'ok':'warn');
+  document.getElementById('badgeLatency').textContent = fast ? 'Rapide' : 'Lent';
+  document.getElementById('valLatency').textContent = latency + 's';
+
+  document.getElementById('badgeInter').className = 'status-badge '+(apiOk?'ok':'warn');
+  document.getElementById('badgeInter').textContent = apiOk ? 'Active' : '—';
+  document.getElementById('valInter').textContent = apiOk ? (data.interactions||'—') : '—';
+
+  // Stats
+  if (apiOk && data.stats) {
+    document.getElementById('statUsers').textContent = data.stats.users;
+    document.getElementById('statBooks').textContent = data.stats.books;
+    document.getElementById('statRatings').textContent = data.stats.ratings;
+    document.getElementById('statReviews').textContent = data.stats.reviews;
+  }
+
+  // Endpoints table
+  ['st1','st2','st3','st4','st5','st6','st7','st8'].forEach(id => {
+    document.getElementById(id).innerHTML = badge(apiOk);
+  });
+
+  document.getElementById('lastChecked').textContent = 'Dernière vérification : ' + new Date().toLocaleTimeString();
+
+  if (apiOk) {
+    log('API 200 OK', 'ok');
+    log(`Latence : ${latency}s`, fast?'ok':'warn');
+    log('Modèle ANN : chargé', 'ok');
+    log('MySQL : connecté', 'ok');
+  } else {
+    log('API hors ligne — lancez : uvicorn main:app --reload', 'err');
+    log('Si Docker : docker-compose up', 'warn');
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  runHealthCheck();
+  setInterval(runHealthCheck, 30000);
+});
+</script>
+</body>
+</html>

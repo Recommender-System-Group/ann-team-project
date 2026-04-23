@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Folio — Catalogue</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth.js"></script>
+</head>
+<body>
+<nav>
+  <a href="#" class="nav-logo">
+  Fo<span class="dot">.</span>lio
+</a>
+  <ul class="nav-links">
+    <li><a href="index.html" class="active">Catalogue</a></li>
+    <li><a href="preferences.html">Mon profil</a></li>
+    <li><a href="recommendations.html">Pour moi</a></li>
+    <li><a href="health.html">Statut</a></li>
+  </ul>
+  <div class="nav-right">
+    <span class="nav-user">Bonjour, <strong id="navUsername">—</strong></span>
+    <button class="btn-logout" onclick="logout()">Déconnexion</button>
+    <a href="health.html" style="display:flex;align-items:center;gap:5px;text-decoration:none;font-family:var(--sans);font-size:0.75rem;color:#888;margin-left:0.5rem">
+      <span class="health-dot" id="navDot"></span>
+    </a>
+  </div>
+</nav>
+
+<div style="max-width:1100px;margin:0 auto;padding:0 2rem">
+  <div class="hero">
+    <p class="hero-eyebrow">270 000+ livres · Goodreads Dataset · ANN Model</p>
+    <h1>Découvrez votre prochain<br><em>livre favori</em></h1>
+    <p>Recherchez, notez, et laissez notre moteur de recommandation trouver les livres faits pour vous.</p>
+    <div class="search-wrap">
+      <input type="text" id="searchInput" placeholder="Titre, auteur, genre…" />
+      <button onclick="doSearch()">Chercher</button>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+  <div class="filters">
+    <span class="filter-label">Genre :</span>
+    <button class="filter-btn active" onclick="filterGenre(this,'')">Tous</button>
+    <button class="filter-btn" onclick="filterGenre(this,'Fiction')">Fiction</button>
+    <button class="filter-btn" onclick="filterGenre(this,'Fantasy')">Fantasy</button>
+    <button class="filter-btn" onclick="filterGenre(this,'Mystery')">Mystère</button>
+    <button class="filter-btn" onclick="filterGenre(this,'Romance')">Romance</button>
+    <button class="filter-btn" onclick="filterGenre(this,'Science Fiction')">Sci-Fi</button>
+    <button class="filter-btn" onclick="filterGenre(this,'Horror')">Horreur</button>
+    <button class="filter-btn" onclick="filterGenre(this,'Biography')">Biographie</button>
+    <button class="filter-btn" onclick="filterGenre(this,'History')">Histoire</button>
+  </div>
+
+  <div class="section-header">
+    <h2 class="section-title">Livres populaires</h2>
+    <span class="section-count" id="bookCount">12 livres</span>
+  </div>
+
+  <div class="books-grid" id="booksGrid"></div>
+  <div id="loadingBooks" class="loading-row" style="display:none"><span></span><span></span><span></span></div>
+  <div id="emptyState" class="empty-state" style="display:none">
+    <p>Aucun livre trouvé pour votre recherche.</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const session = requireAuth();
+if (!session) window.location.href = 'login.html';
+document.getElementById('navUsername').textContent = session.username || '—';
+
+const MOCK_BOOKS = [
+  { book_id:'35031085', title:'Frankenstein: The 1818 Text', author:'Mary Shelley', genre:'Horror', avg_rating:4.2 },
+  { book_id:'3', title:"Harry Potter and the Sorcerer's Stone", author:'J.K. Rowling', genre:'Fantasy', avg_rating:4.8 },
+  { book_id:'5', title:'The Great Gatsby', author:'F. Scott Fitzgerald', genre:'Fiction', avg_rating:3.9 },
+  { book_id:'7', title:'To Kill a Mockingbird', author:'Harper Lee', genre:'Fiction', avg_rating:4.6 },
+  { book_id:'9', title:'Dune', author:'Frank Herbert', genre:'Science Fiction', avg_rating:4.5 },
+  { book_id:'11', title:'Pride and Prejudice', author:'Jane Austen', genre:'Romance', avg_rating:4.4 },
+  { book_id:'13', title:'The Hound of the Baskervilles', author:'Arthur Conan Doyle', genre:'Mystery', avg_rating:4.3 },
+  { book_id:'15', title:'Sapiens', author:'Yuval Noah Harari', genre:'History', avg_rating:4.5 },
+  { book_id:'17', title:'1984', author:'George Orwell', genre:'Science Fiction', avg_rating:4.7 },
+  { book_id:'19', title:'The Hobbit', author:'J.R.R. Tolkien', genre:'Fantasy', avg_rating:4.6 },
+  { book_id:'21', title:'Steve Jobs', author:'Walter Isaacson', genre:'Biography', avg_rating:4.1 },
+  { book_id:'23', title:'Gone Girl', author:'Gillian Flynn', genre:'Mystery', avg_rating:4.0 },
+];
+
+const genreColors = {
+  'Horror':['#2d1b1b','rgba(255,255,255,0.6)'],
+  'Fantasy':['#1a2540','rgba(255,255,255,0.6)'],
+  'Fiction':['#1c2b1c','rgba(255,255,255,0.6)'],
+  'Science Fiction':['#1a1a2e','rgba(255,255,255,0.6)'],
+  'Romance':['#2e1a22','rgba(255,255,255,0.6)'],
+  'Mystery':['#1e1e1e','rgba(255,255,255,0.6)'],
+  'Biography':['#2a2215','rgba(255,255,255,0.6)'],
+  'History':['#1e1a10','rgba(255,255,255,0.6)'],
+};
+
+let activeGenre = '';
+
+function starsHtml(r) { return '★'.repeat(Math.round(r)) + '☆'.repeat(5-Math.round(r)); }
+
+function renderBooks(books) {
+  const grid = document.getElementById('booksGrid');
+  document.getElementById('emptyState').style.display = books.length ? 'none' : 'block';
+  document.getElementById('bookCount').textContent = books.length + ' livre' + (books.length > 1 ? 's' : '');
+  if (!books.length) { grid.innerHTML = ''; return; }
+  const [bg, tc] = ['#2a2a2a', 'rgba(255,255,255,0.6)'];
+  grid.innerHTML = books.map(b => {
+    const [bg, tc] = genreColors[b.genre] || ['#2a2a2a','rgba(255,255,255,0.6)'];
+    return `
+    <a href="book-detail.html?id=${b.book_id}" class="book-card">
+      <div class="book-cover" style="background:${bg}">
+        <div class="book-cover-inner">
+          <div class="cover-title" style="color:${tc}">${b.title}</div>
+          <div style="width:24px;height:1px;background:${tc};margin:0.5rem auto;opacity:0.4"></div>
+        </div>
+      </div>
+      <div class="book-title">${b.title}</div>
+      <div class="book-author">${b.author}</div>
+      <div>
+        <span class="book-stars" style="color:var(--gold)">${starsHtml(b.avg_rating)}</span>
+        <span class="book-rating-num">${b.avg_rating.toFixed(1)}</span>
+      </div>
+    </a>`;
+  }).join('');
+}
+
+function filterGenre(btn, genre) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeGenre = genre;
+  applyFilters();
+}
+
+function doSearch() { applyFilters(); }
+
+function applyFilters() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  let books = MOCK_BOOKS;
+  if (activeGenre) books = books.filter(b => b.genre === activeGenre);
+  if (q) books = books.filter(b => b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q));
+  renderBooks(books);
+
+  // ── REAL API avec JWT ──
+  // const params = new URLSearchParams();
+  // if (activeGenre) params.append('genre', activeGenre);
+  // if (q) params.append('q', q);
+  // const data = await apiFetch('/books?' + params);
+  // if (data) renderBooks(data);
+}
+
+async function checkHealth() {
+  try {
+    const r = await fetch(`${API}/health`);
+    if (r.ok) { document.getElementById('navDot').className = 'health-dot'; }
+  } catch { document.getElementById('navDot').className = 'health-dot offline'; }
+}
+
+document.getElementById('searchInput').addEventListener('keydown', e => { if(e.key==='Enter') doSearch(); });
+renderBooks(MOCK_BOOKS);
+checkHealth();
+</script>
+</body>
+</html>

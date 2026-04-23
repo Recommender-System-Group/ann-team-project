@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Folio — Connexion</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth.js"></script>
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #1a1a2e; }
+    .login-wrap { width: 100%; max-width: 420px; padding: 2rem; }
+    .login-logo { font-family: var(--serif); font-size: 2rem; font-weight: 600; color: var(--white); text-align: center; margin-bottom: 0.4rem; }
+    .login-logo span { color: var(--gold); }
+    .login-sub { font-family: var(--body); font-size: 0.88rem; color: #aaa; text-align: center; margin-bottom: 2rem; font-style: italic; }
+    .login-card { background: var(--white); border: 1px solid var(--border); padding: 2.2rem; }
+    .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1.8rem; }
+    .tab { flex: 1; text-align: center; padding: 0.7rem; font-family: var(--sans); font-size: 0.82rem; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; color: var(--ink-light); border-bottom: 2px solid transparent; transition: all 0.2s; }
+    .tab.active { color: var(--ink); border-bottom-color: var(--accent); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .divider { display: flex; align-items: center; gap: 0.8rem; margin: 1.2rem 0; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .divider span { font-family: var(--sans); font-size: 0.72rem; color: var(--ink-light); }
+    .error-msg { background: #fce8e8; border: 1px solid #f09595; color: #a71d2a; font-family: var(--sans); font-size: 0.8rem; padding: 0.65rem 0.9rem; border-radius: 2px; margin-bottom: 1rem; display: none; }
+    .success-msg { background: #eaf7ee; border: 1px solid #9fe1cb; color: #0a6640; font-family: var(--sans); font-size: 0.8rem; padding: 0.65rem 0.9rem; border-radius: 2px; margin-bottom: 1rem; display: none; }
+  </style>
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-logo">Fo<span class="dot">.</span>lio</div>
+  <div class="login-sub">Votre moteur de recommandation de livres</div>
+
+  <div class="login-card">
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('login')">Connexion</div>
+      <div class="tab" onclick="switchTab('register')">Inscription</div>
+    </div>
+
+    <!-- LOGIN -->
+    <div class="tab-panel active" id="panel-login">
+      <div class="error-msg" id="login-error"></div>
+      <div class="form-row">
+        <label class="field-label" for="login-username">Nom d'utilisateur</label>
+        <input type="text" id="login-username" placeholder="votre_pseudo" autocomplete="username" />
+      </div>
+      <div class="form-row">
+        <label class="field-label" for="login-password">Mot de passe</label>
+        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
+      </div>
+      <div style="margin-top:1.5rem">
+        <button class="btn-primary" onclick="doLogin()">Se connecter</button>
+      </div>
+    </div>
+
+    <!-- REGISTER -->
+    <div class="tab-panel" id="panel-register">
+      <div class="error-msg" id="register-error"></div>
+      <div class="success-msg" id="register-success"></div>
+      <div class="form-row">
+        <label class="field-label" for="reg-username">Nom d'utilisateur</label>
+        <input type="text" id="reg-username" placeholder="votre_pseudo" autocomplete="username" />
+      </div>
+      <div class="form-row">
+        <label class="field-label" for="reg-email">Email</label>
+        <input type="email" id="reg-email" placeholder="vous@email.com" autocomplete="email" />
+      </div>
+      <div class="form-row">
+        <label class="field-label" for="reg-password">Mot de passe</label>
+        <input type="password" id="reg-password" placeholder="minimum 6 caractères" autocomplete="new-password" />
+      </div>
+      <div style="margin-top:1.5rem">
+        <button class="btn-primary" onclick="doRegister()">Créer mon compte</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', (i===0 && tab==='login') || (i===1 && tab==='register')));
+  document.getElementById('panel-login').classList.toggle('active', tab === 'login');
+  document.getElementById('panel-register').classList.toggle('active', tab === 'register');
+}
+
+function showError(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function hideMsg(id) { document.getElementById(id).style.display = 'none'; }
+
+async function doLogin() {
+  hideMsg('login-error');
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  if (!username || !password) { showError('login-error', 'Remplissez tous les champs.'); return; }
+
+  try {
+    const res = await fetch(API + '/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (!data.ok) { showError('login-error', data.error || 'Identifiants incorrects.'); return; }
+    // Stocker le token JWT + infos session
+    localStorage.setItem('folio_token', data.token);
+    localStorage.setItem('folio_session', JSON.stringify({ username: data.username }));
+    window.location.href = 'index.html';
+  } catch {
+    // Fallback mock si API hors ligne
+    if (username && password.length >= 3) {
+      localStorage.setItem('folio_token', 'mock_jwt_' + username);
+      localStorage.setItem('folio_session', JSON.stringify({ username }));
+      window.location.href = 'index.html';
+    } else {
+      showError('login-error', 'Serveur inaccessible ou identifiants incorrects.');
+    }
+  }
+}
+
+async function doRegister() {
+  hideMsg('register-error');
+  hideMsg('register-success');
+  const username = document.getElementById('reg-username').value.trim();
+  const email    = document.getElementById('reg-email').value.trim();
+  const password = document.getElementById('reg-password').value;
+  if (!username || !email || !password) { showError('register-error', 'Remplissez tous les champs.'); return; }
+  if (password.length < 6) { showError('register-error', 'Mot de passe trop court (min 6 caractères).'); return; }
+
+  try {
+    const res = await fetch(API + '/auth/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password })
+    });
+    const data = await res.json();
+    if (!data.ok) { showError('register-error', data.error || 'Erreur inscription.'); return; }
+    const s = document.getElementById('register-success');
+    s.textContent = 'Compte créé ! Vous pouvez vous connecter.';
+    s.style.display = 'block';
+    setTimeout(() => switchTab('login'), 1500);
+  } catch {
+    // Fallback mock si API hors ligne
+    const s = document.getElementById('register-success');
+    s.textContent = 'Compte créé ! Redirection vers connexion...';
+    s.style.display = 'block';
+    setTimeout(() => switchTab('login'), 1500);
+  }
+}
+
+// Rediriger si déjà connecté (vérifie le token JWT)
+if (localStorage.getItem('folio_token')) window.location.href = 'index.html';
+
+// Enter key support
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    if (document.getElementById('panel-login').classList.contains('active')) doLogin();
+    else doRegister();
+  }
+});
+</script>
+</body>
+</html>

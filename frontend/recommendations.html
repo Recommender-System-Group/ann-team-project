@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pour moi — Folio</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth.js"></script>
+</head>
+<body>
+<nav>
+   <a href="#" class="nav-logo">
+  Fo<span class="dot">.</span>lio
+</a>
+  <ul class="nav-links">
+    <li><a href="index.html">Catalogue</a></li>
+    <li><a href="preferences.html">Mon profil</a></li>
+    <li><a href="recommendations.html" class="active">Pour moi</a></li>
+    <li><a href="health.html">Statut</a></li>
+  </ul>
+  <div class="nav-right">
+    <span class="nav-user">Bonjour, <strong id="navUsername">—</strong></span>
+    <button class="btn-logout" onclick="logout()">Déconnexion</button>
+  </div>
+</nav>
+
+<div class="page">
+  <div class="page-header">
+    <p class="eyebrow">POST /recommend</p>
+    <h1>Recommandé <em>pour vous</em></h1>
+    <p>Sélections personnalisées basées sur votre profil et notre modèle ANN.</p>
+  </div>
+
+  <!-- REQUEST PANEL -->
+  <div style="background:var(--white);border:1px solid var(--border);padding:1.6rem;margin-bottom:1.8rem">
+    <p style="font-family:var(--sans);font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-light);margin-bottom:1rem">Paramètres de la requête</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:1rem;align-items:end;flex-wrap:wrap">
+      <div>
+        <label class="field-label">User ID</label>
+        <input type="text" id="reqUserId" placeholder="user_1" />
+      </div>
+      <div>
+        <label class="field-label">Nombre de résultats (n)</label>
+        <input type="number" id="reqN" value="10" min="1" max="20" />
+      </div>
+      <button class="btn-primary" style="width:auto;padding:0.85rem 1.8rem" onclick="getRecommendations()">
+        Obtenir mes recommandations
+      </button>
+    </div>
+    <div style="margin-top:1rem">
+      <label class="field-label">Livres aimés (IDs séparés par virgule)</label>
+      <input type="text" id="reqLikedBooks" placeholder="ex: 35031085, 3, 9" />
+    </div>
+  </div>
+
+  <!-- META BAR -->
+  <div class="rec-meta" id="recMeta" style="display:none">
+    <span>Utilisateur : <strong id="metaUser">—</strong></span>
+    <span class="divider">|</span>
+    <span>Modèle : <strong>ANN · Collaboratif</strong></span>
+    <span class="divider">|</span>
+    <span>Temps : <strong id="metaTime">—</strong></span>
+    <span class="divider">|</span>
+    <span id="metaCount">— résultats</span>
+  </div>
+
+  <!-- LOADING -->
+  <div class="loading-row" id="loadingRecs" style="display:none"><span></span><span></span><span></span></div>
+
+  <!-- RESULTS -->
+  <div id="recsList"></div>
+
+  <!-- EMPTY STATE -->
+  <div class="empty-state" id="recsEmpty">
+    <p>Entrez votre User ID et cliquez sur "Obtenir mes recommandations".</p>
+    <div style="margin-top:1.5rem">
+      <a href="preferences.html" class="btn-secondary" style="font-size:0.78rem">Configurer mon profil d'abord</a>
+    </div>
+  </div>
+
+  <!-- RAW JSON -->
+  <div id="rawSection" style="display:none;margin-top:2.5rem;border-top:1px solid var(--border);padding-top:1.8rem">
+    <button onclick="toggleRaw()" style="background:none;border:none;cursor:pointer;font-family:var(--sans);font-size:0.76rem;color:var(--ink-light);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.8rem">
+      ▸ Voir la réponse API brute
+    </button>
+    <pre id="rawJson" style="display:none;background:var(--ink);color:#a8d8a8;font-family:monospace;font-size:0.73rem;padding:1.4rem;border-radius:2px;overflow-x:auto;white-space:pre-wrap"></pre>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const session = requireAuth();
+if (!session) window.location.href = 'login.html';
+document.getElementById('navUsername').textContent = session.username || '—';
+
+const MOCK_RECS = [
+  { book_id:'101', title:'The Name of the Wind', author:'Patrick Rothfuss', genre:'Fantasy', score:0.97 },
+  { book_id:'102', title:'Brave New World', author:'Aldous Huxley', genre:'Science Fiction', score:0.94 },
+  { book_id:'103', title:'The Shadow of the Wind', author:'Carlos Ruiz Zafón', genre:'Mystery', score:0.91 },
+  { book_id:'104', title:'The Alchemist', author:'Paulo Coelho', genre:'Fiction', score:0.89 },
+  { book_id:'105', title:"Ender's Game", author:'Orson Scott Card', genre:'Science Fiction', score:0.87 },
+  { book_id:'106', title:'Rebecca', author:'Daphne du Maurier', genre:'Mystery', score:0.85 },
+  { book_id:'107', title:"The Hitchhiker's Guide to the Galaxy", author:'Douglas Adams', genre:'Science Fiction', score:0.83 },
+  { book_id:'108', title:'The Count of Monte Cristo', author:'Alexandre Dumas', genre:'Fiction', score:0.80 },
+  { book_id:'109', title:'A Game of Thrones', author:'George R.R. Martin', genre:'Fantasy', score:0.78 },
+  { book_id:'110', title:'The Goldfinch', author:'Donna Tartt', genre:'Fiction', score:0.75 },
+];
+
+const genreColors = {
+  'Fantasy':'#1a2540','Science Fiction':'#1a1a2e','Mystery':'#1e1e1e',
+  'Fiction':'#1c2b1c','Horror':'#2d1b1b','Romance':'#2e1a22'
+};
+
+let rawVisible = false;
+
+function renderRecs(recs, userId) {
+  document.getElementById('recsEmpty').style.display = 'none';
+  document.getElementById('recMeta').style.display = 'flex';
+  document.getElementById('metaUser').textContent = userId;
+  document.getElementById('metaCount').textContent = recs.length + ' résultat' + (recs.length > 1 ? 's' : '');
+
+  document.getElementById('recsList').innerHTML = recs.map((b, i) => `
+    <div class="rec-card">
+      <div class="rec-rank">${String(i+1).padStart(2,'0')}</div>
+      <a href="book-detail.html?id=${b.book_id}" class="rec-cover" style="background:${genreColors[b.genre]||'#2a2a2a'};text-decoration:none">
+        <div style="padding:4px;text-align:center">
+          <div style="font-family:var(--serif);font-size:0.6rem;font-style:italic;color:rgba(255,255,255,0.6);line-height:1.2">${b.title}</div>
+        </div>
+      </a>
+      <div>
+        <a href="book-detail.html?id=${b.book_id}" style="text-decoration:none">
+          <div class="rec-title" style="color:var(--ink)">${b.title}</div>
+        </a>
+        <div class="rec-author">${b.author}</div>
+        <span class="rec-genre-tag">${b.genre}</span>
+        <div style="margin-top:0.6rem;font-family:var(--sans);font-size:0.76rem;color:var(--ink-light)">
+          Correspondance : <strong style="color:var(--ink)">${(b.score*100).toFixed(0)}%</strong>
+        </div>
+      </div>
+      <div style="text-align:center;min-width:60px">
+        <div class="score-circle">
+          <div class="score-num">${(b.score*100).toFixed(0)}</div>
+          <div class="score-label">match</div>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+async function getRecommendations() {
+  const userId = document.getElementById('reqUserId').value.trim();
+  const n = parseInt(document.getElementById('reqN').value) || 10;
+  const liked = document.getElementById('reqLikedBooks').value.split(',').map(s=>s.trim()).filter(Boolean);
+  if (!userId) { showToast('Entrez votre User ID.'); return; }
+
+  document.getElementById('recsList').innerHTML = '';
+  document.getElementById('recsEmpty').style.display = 'none';
+  document.getElementById('recMeta').style.display = 'none';
+  document.getElementById('rawSection').style.display = 'none';
+  document.getElementById('loadingRecs').style.display = 'flex';
+
+  const t0 = performance.now();
+
+  // ── REAL API avec JWT ──
+  // try {
+  //   const data = await apiFetch('/recommend', {
+  //     method: 'POST', body: JSON.stringify({ liked_books: liked, n })
+  //     // user_id extrait automatiquement du token JWT côté serveur
+  //   });
+  //   const elapsed = ((performance.now()-t0)/1000).toFixed(2);
+  //   document.getElementById('metaTime').textContent = elapsed + 's';
+  //   document.getElementById('loadingRecs').style.display = 'none';
+  //   if (data) {
+  //     renderRecs(data.recommendations || data, session.username);
+  //     document.getElementById('rawJson').textContent = JSON.stringify(data, null, 2);
+  //     document.getElementById('rawSection').style.display = 'block';
+  //   }
+  // } catch(e) {
+  //   document.getElementById('loadingRecs').style.display = 'none';
+  //   showToast('Erreur API : ' + e.message);
+  // }
+
+  // ── MOCK ──
+  await new Promise(r => setTimeout(r, 1000));
+  const elapsed = ((performance.now()-t0)/1000).toFixed(2);
+  document.getElementById('metaTime').textContent = elapsed + 's';
+  document.getElementById('loadingRecs').style.display = 'none';
+  const recs = MOCK_RECS.slice(0, Math.min(n, MOCK_RECS.length));
+  renderRecs(recs, userId);
+  document.getElementById('rawJson').textContent = JSON.stringify({ status:'ok', user_id:userId, recommendations:recs }, null, 2);
+  document.getElementById('rawSection').style.display = 'block';
+}
+
+function toggleRaw() {
+  rawVisible = !rawVisible;
+  document.getElementById('rawJson').style.display = rawVisible ? 'block' : 'none';
+  document.querySelector('#rawSection button').textContent = (rawVisible?'▾':'▸') + ' Voir la réponse API brute';
+}
+
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type?' '+type:'');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('folio_prefs');
+  if (saved) {
+    const p = JSON.parse(saved);
+    if (p.user_id) document.getElementById('reqUserId').value = p.user_id;
+    if (p.n) document.getElementById('reqN').value = p.n;
+  } else {
+    document.getElementById('reqUserId').value = session.username || '';
+  }
+});
+</script>
+</body>
+</html>
